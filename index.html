@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rugby Tactics Board</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1><i class="fa-solid fa-football"></i> TacticsBoard</h1>
+            </div>
+            
+            <div class="tool-section">
+                <h2>Players</h2>
+                <div class="player-palette">
+                    <div class="palette-item" draggable="true" data-type="attacker" data-color="#e74c3c">
+                        <div class="player-icon attacker"></div>
+                        <span>Attacker</span>
+                    </div>
+                    <div class="palette-item" draggable="true" data-type="defender" data-color="#3498db">
+                        <div class="player-icon defender"></div>
+                        <span>Defender</span>
+                    </div>
+                    <div class="palette-item" draggable="true" data-type="ball" data-color="#f1c40f">
+                        <div class="player-icon ball"></div>
+                        <span>Ball</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tool-section">
+                <h2>Drawing Tools</h2>
+                <div class="drawing-tools">
+                    <button class="tool-btn active" id="tool-pointer"><i class="fa-solid fa-arrow-pointer"></i> Select</button>
+                    <button class="tool-btn" id="tool-run"><i class="fa-solid fa-arrow-right"></i> Run</button>
+                    <button class="tool-btn" id="tool-pass"><i class="fa-solid fa-arrow-right-long"></i> Pass (Dashed)</button>
+                    <button class="tool-btn" id="tool-kick"><i class="fa-solid fa-water"></i> Kick (Wave)</button>
+                    <button class="tool-btn" id="tool-erase"><i class="fa-solid fa-eraser"></i> Erase Line</button>
+                </div>
+            </div>
+
+            <div class="tool-section">
+                <h2>Actions</h2>
+                <div class="action-tools">
+                    <button class="action-btn danger" id="btn-clear"><i class="fa-solid fa-trash"></i> Clear Board</button>
+                </div>
+            </div>
+
+            <div class="tool-section">
+                <h2>Saved Plays</h2>
+                <div class="save-controls">
+                    <input type="text" id="play-name" placeholder="Play Name...">
+                    <button class="action-btn primary" id="btn-save"><i class="fa-solid fa-floppy-disk"></i> Save Play</button>
+                </div>
+                <ul class="saved-plays-list" id="saved-plays-list">
+                    <!-- Saved plays will appear here -->
+                </ul>
+            </div>
+        </aside>
+
+        <!-- Main Board Area -->
+        <main class="board-area">
+            <div class="pitch-container" id="pitch-container">
+                <!-- SVG Canvas for drawing lines -->
+                <svg id="drawing-layer" width="100%" height="100%"></svg>
+                <!-- Pitch lines -->
+                <div class="pitch-lines">
+                    <div class="line half-way"></div>
+                    <div class="line twenty-two top"></div>
+                    <div class="line twenty-two bottom"></div>
+                    <div class="line ten-meter top"></div>
+                    <div class="line ten-meter bottom"></div>
+                    <div class="line five-meter top"></div>
+                    <div class="line five-meter bottom"></div>
+                    <div class="line try-line top"></div>
+                    <div class="line try-line bottom"></div>
+                </div>
+                <!-- Players will be dropped here -->
+                <div id="players-layer"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/storage.js"></script>
+    <script src="js/board.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

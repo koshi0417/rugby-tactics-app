@@ -1,0 +1,325 @@
+:root {
+    --bg-color: #0f172a;
+    --panel-bg: rgba(30, 41, 59, 0.7);
+    --panel-border: rgba(255, 255, 255, 0.1);
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --accent-color: #3b82f6;
+    --accent-hover: #2563eb;
+    --pitch-bg: #166534;
+    --pitch-line: rgba(255, 255, 255, 0.6);
+    --attacker-color: #ef4444;
+    --defender-color: #3b82f6;
+    --ball-color: #eab308;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    height: 100vh;
+    overflow: hidden;
+}
+
+.app-container {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* Sidebar Styling */
+.sidebar {
+    width: 300px;
+    background: var(--panel-bg);
+    border-right: 1px solid var(--panel-border);
+    backdrop-filter: blur(10px);
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    z-index: 10;
+    overflow-y: auto;
+}
+
+.sidebar-header {
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.sidebar-header h1 {
+    font-size: 1.5rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: #fff;
+}
+
+.tool-section {
+    margin-bottom: 25px;
+}
+
+.tool-section h2 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+    letter-spacing: 0.5px;
+}
+
+/* Draggable Players */
+.player-palette {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.palette-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    cursor: grab;
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.05);
+    transition: background 0.2s;
+}
+
+.palette-item:hover {
+    background: rgba(255,255,255,0.1);
+}
+
+.player-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+}
+
+.player-icon.attacker { background-color: var(--attacker-color); }
+.player-icon.defender { background-color: var(--defender-color); }
+.player-icon.ball { 
+    background-color: var(--ball-color); 
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    transform: rotate(45deg);
+}
+
+/* Buttons */
+.tool-btn, .action-btn {
+    width: 100%;
+    padding: 10px 15px;
+    margin-bottom: 8px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--panel-border);
+    color: var(--text-primary);
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.9rem;
+    text-align: left;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.tool-btn:hover {
+    background: rgba(255,255,255,0.1);
+}
+
+.tool-btn.active {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    font-weight: 600;
+}
+
+.action-btn.primary {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    justify-content: center;
+}
+
+.action-btn.primary:hover {
+    background: var(--accent-hover);
+}
+
+.action-btn.danger {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
+    justify-content: center;
+}
+
+.action-btn.danger:hover {
+    background: rgba(239, 68, 68, 0.4);
+}
+
+/* Save Controls */
+.save-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.save-controls input {
+    padding: 10px;
+    background: rgba(0,0,0,0.2);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    color: white;
+    font-family: inherit;
+}
+
+.saved-plays-list {
+    list-style: none;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.saved-play-item {
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 4px;
+    margin-bottom: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.saved-play-item:hover {
+    background: rgba(255,255,255,0.1);
+}
+
+.delete-play-btn {
+    background: none;
+    border: none;
+    color: #ef4444;
+    cursor: pointer;
+}
+
+/* Main Board Area */
+.board-area {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+}
+
+.pitch-container {
+    width: 100%;
+    max-width: 800px;
+    aspect-ratio: 1 / 1.4; /* Rugby pitch ratio approx */
+    background: linear-gradient(180deg, #166534 0%, #14532d 100%);
+    border: 4px solid white;
+    position: relative;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+/* Pitch Markings */
+.pitch-lines {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+}
+
+.line {
+    position: absolute;
+    width: 100%;
+    height: 2px;
+    background-color: var(--pitch-line);
+}
+
+.line.half-way { top: 50%; transform: translateY(-50%); }
+.line.twenty-two.top { top: 22%; }
+.line.twenty-two.bottom { bottom: 22%; }
+.line.ten-meter.top { top: 40%; border-top: 2px dashed var(--pitch-line); background: transparent; }
+.line.ten-meter.bottom { bottom: 40%; border-top: 2px dashed var(--pitch-line); background: transparent; }
+.line.five-meter.top { top: 5%; border-top: 2px dashed var(--pitch-line); background: transparent; }
+.line.five-meter.bottom { bottom: 5%; border-top: 2px dashed var(--pitch-line); background: transparent; }
+.line.try-line.top { top: 10%; height: 4px; background-color: white; }
+.line.try-line.bottom { bottom: 10%; height: 4px; background-color: white; }
+
+/* Drawing Layer */
+#drawing-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none; /* Let clicks pass through to board when not drawing */
+    z-index: 5;
+}
+
+#drawing-layer.drawing-active {
+    pointer-events: auto; /* Capture events when drawing tool is selected */
+    cursor: crosshair;
+}
+
+/* Players Layer */
+#players-layer {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+}
+
+.player-node {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+    transform: translate(-50%, -50%);
+    cursor: grab;
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 10px;
+    font-weight: bold;
+    user-select: none;
+}
+
+.player-node:active {
+    cursor: grabbing;
+    transform: translate(-50%, -50%) scale(1.1);
+}
+
+.player-node.attacker { background-color: var(--attacker-color); }
+.player-node.defender { background-color: var(--defender-color); }
+.player-node.ball { 
+    background-color: var(--ball-color); 
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.player-node .delete-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: red;
+    color: white;
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    font-size: 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.player-node:hover .delete-badge {
+    opacity: 1;
+}
