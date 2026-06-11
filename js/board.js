@@ -52,7 +52,24 @@ class Board {
         // Setup palette items drag start in app.js
     }
 
-    addPlayer(type, x, y, id = null) {
+    addPlayer(type, x, y, id = null, hasBall = false) {
+        if (type === 'ball' && !id) {
+            const rect = this.pitchContainer.getBoundingClientRect();
+            let closestId = this.findClosestPlayer((x / 100) * rect.width, (y / 100) * rect.height);
+            if (closestId) {
+                const player = this.players.find(p => p.id === closestId);
+                if (player && player.type !== 'ball') {
+                    const elX = parseFloat(player.element.style.left);
+                    const elY = parseFloat(player.element.style.top);
+                    const dist = Math.sqrt(Math.pow(elX - x, 2) + Math.pow(elY - y, 2));
+                    if (dist < 5) {
+                        this.giveBallTo(closestId);
+                        return; // Absorb ball into player
+                    }
+                }
+            }
+        }
+
         const playerId = id || 'player_' + Date.now();
         const el = document.createElement('div');
         el.className = `player-node ${type}`;
@@ -72,7 +89,23 @@ class Board {
         this.makeNodeDraggable(el, playerId);
 
         this.playersLayer.appendChild(el);
-        this.players.push({ id: playerId, type, element: el });
+        this.players.push({ id: playerId, type, element: el, hasBall: false });
+        
+        if (hasBall) {
+            this.giveBallTo(playerId);
+        }
+    }
+
+    giveBallTo(playerId) {
+        this.players.forEach(p => {
+            p.hasBall = false;
+            p.element.classList.remove('has-ball');
+        });
+        const player = this.players.find(p => p.id === playerId);
+        if (player) {
+            player.hasBall = true;
+            player.element.classList.add('has-ball');
+        }
     }
 
     removePlayer(id) {
@@ -324,7 +357,8 @@ class Board {
                 id: p.id,
                 type: p.type,
                 x: parseFloat(p.element.style.left),
-                y: parseFloat(p.element.style.top)
+                y: parseFloat(p.element.style.top),
+                hasBall: p.hasBall
             };
         });
 
@@ -345,7 +379,7 @@ class Board {
         
         if (state.players) {
             state.players.forEach(p => {
-                this.addPlayer(p.type, p.x, p.y, p.id);
+                this.addPlayer(p.type, p.x, p.y, p.id, p.hasBall);
             });
         }
 
@@ -416,8 +450,7 @@ class Board {
     // --- Simulation Logic ---
     playSimulation() {
         if (this.isPlaying) return;
-        if (this.lines.length === 0) return;
-
+        
         // Save initial state for reset if not already saved
         if (!this.initialState) {
             this.initialState = this.getState();
@@ -425,22 +458,87 @@ class Board {
         this.isPlaying = true;
         this.setTool('pointer');
 
-        const duration = 2000; // 2 seconds
+        const duration = 3000; // 3 seconds for full play
         const startTime = performance.now();
 
-        // Get total lengths for all lines mapped to players
-        const lineData = this.lines.map(l => {
-            return {
-                line: l,
-                length: l.pathElement.getTotalLength(),
-                player: this.players.find(p => p.id === l.playerId)
-            };
-        }).filter(d => d.player);
+        // 1. Build Timeline
+        const runs = this.lines.filter(l => l.type === 'run');
+        const passes = this.lines.filter(l => l.type === 'pass' || l.type === 'kick');
+        
+        const playerRuns = {};
+        runs.forEach(r => {
+            if (r.playerId) playerRuns[r.playerId] = r;
+        });
 
-        if (lineData.length === 0) {
-            this.isPlaying = false;
-            return;
+        let ballEvents = [];
+        let initialCarrier = this.players.find(p => p.hasBall);
+        
+        if (initialCarrier) {
+            const carrierPass = passes.find(p => p.playerId === initialCarrier.id);
+            if (carrierPass) {
+                let t1 = 0;
+                const passPath = carrierPass.pathElement;
+                const passStartPt = passPath.getPointAtLength(0);
+                
+                if (playerRuns[initialCarrier.id]) {
+                    const runPath = playerRuns[initialCarrier.id].pathElement;
+                    const runLen = runPath.getTotalLength();
+                    let minDist = Infinity;
+                    for(let i=0; i<=50; i++) {
+                        const pt = runPath.getPointAtLength((i/50)*runLen);
+                        const dist = Math.hypot(pt.x - passStartPt.x, pt.y - passStartPt.y);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            t1 = i/50;
+                        }
+                    }
+                }
+                
+                ballEvents.push({ startT: 0, endT: t1, type: 'carry', playerId: initialCarrier.id });
+                
+                let t2 = Math.min(1.0, t1 + 0.3); // pass flight time
+                ballEvents.push({ startT: t1, endT: t2, type: 'pass', path: passPath });
+                
+                const passEndPt = passPath.getPointAtLength(passPath.getTotalLength());
+                let receiverId = null;
+                let minRecDist = 60; // detection radius
+                
+                this.players.forEach(p => {
+                    if (p.id === initialCarrier.id || p.type === 'ball') return;
+                    
+                    let pPos = { x: parseFloat(p.element.style.left), y: parseFloat(p.element.style.top) };
+                    if (playerRuns[p.id]) {
+                        const runPath = playerRuns[p.id].pathElement;
+                        const pt = runPath.getPointAtLength(t2 * runPath.getTotalLength());
+                        pPos = { x: pt.x, y: pt.y };
+                    } else {
+                        const rect = this.pitchContainer.getBoundingClientRect();
+                        pPos = { x: (pPos.x/100)*rect.width, y: (pPos.y/100)*rect.height };
+                    }
+                    
+                    const dist = Math.hypot(pPos.x - passEndPt.x, pPos.y - passEndPt.y);
+                    if (dist < minRecDist) {
+                        minRecDist = dist;
+                        receiverId = p.id;
+                    }
+                });
+                
+                if (receiverId) {
+                    ballEvents.push({ startT: t2, endT: 1.0, type: 'carry', playerId: receiverId });
+                }
+            } else {
+                ballEvents.push({ startT: 0, endT: 1.0, type: 'carry', playerId: initialCarrier.id });
+            }
         }
+
+        // Hide static has-ball indicators and create an animated ball element
+        this.players.forEach(p => p.element.classList.remove('has-ball'));
+        
+        let animBall = document.createElement('div');
+        animBall.className = 'player-node ball anim-ball';
+        animBall.style.zIndex = '20';
+        animBall.style.display = ballEvents.length > 0 ? 'block' : 'none';
+        this.playersLayer.appendChild(animBall);
 
         const animate = (time) => {
             if (!this.isPlaying) return;
@@ -451,19 +549,48 @@ class Board {
 
             const rect = this.pitchContainer.getBoundingClientRect();
 
-            lineData.forEach(data => {
-                const pt = data.line.pathElement.getPointAtLength(data.length * progress);
-                const pX = (pt.x / rect.width) * 100;
-                const pY = (pt.y / rect.height) * 100;
-                
-                data.player.element.style.left = `${pX}%`;
-                data.player.element.style.top = `${pY}%`;
+            // Animate Players
+            Object.keys(playerRuns).forEach(pId => {
+                const runLine = playerRuns[pId];
+                const player = this.players.find(p => p.id === pId);
+                if (player) {
+                    const pt = runLine.pathElement.getPointAtLength(progress * runLine.pathElement.getTotalLength());
+                    const pX = (pt.x / rect.width) * 100;
+                    const pY = (pt.y / rect.height) * 100;
+                    player.element.style.left = `${pX}%`;
+                    player.element.style.top = `${pY}%`;
+                }
             });
+
+            // Animate Ball
+            if (ballEvents.length > 0) {
+                let currentEvent = ballEvents.find(e => progress >= e.startT && progress <= e.endT);
+                if (!currentEvent && progress >= 1) currentEvent = ballEvents[ballEvents.length - 1];
+                
+                if (currentEvent) {
+                    let bX, bY;
+                    if (currentEvent.type === 'carry') {
+                        const carrier = this.players.find(p => p.id === currentEvent.playerId);
+                        if (carrier) {
+                            bX = carrier.element.style.left;
+                            bY = carrier.element.style.top;
+                            animBall.style.left = `calc(${bX} + 6px)`; // slight offset
+                            animBall.style.top = `calc(${bY} + 6px)`;
+                        }
+                    } else if (currentEvent.type === 'pass') {
+                        const passProg = (progress - currentEvent.startT) / (currentEvent.endT - currentEvent.startT);
+                        const pt = currentEvent.path.getPointAtLength(passProg * currentEvent.path.getTotalLength());
+                        animBall.style.left = `${(pt.x / rect.width) * 100}%`;
+                        animBall.style.top = `${(pt.y / rect.height) * 100}%`;
+                    }
+                }
+            }
 
             if (progress < 1) {
                 this.animationId = requestAnimationFrame(animate);
             } else {
                 this.isPlaying = false;
+                // Leave the anim ball where it is until reset
             }
         };
 
@@ -475,6 +602,11 @@ class Board {
             cancelAnimationFrame(this.animationId);
             this.isPlaying = false;
         }
+        
+        // Remove animation ball
+        const animBall = this.playersLayer.querySelector('.anim-ball');
+        if (animBall) animBall.remove();
+
         if (this.initialState) {
             this.loadState(this.initialState);
             this.initialState = null;
