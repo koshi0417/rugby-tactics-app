@@ -27,6 +27,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // but for simplicity we rely on drag and drop API for desktop, and touch events on board for moving)
     });
 
+    // Simulation
+    document.getElementById('btn-play').addEventListener('click', () => {
+        board.playSimulation();
+    });
+
+    document.getElementById('btn-reset').addEventListener('click', () => {
+        board.resetSimulation();
+    });
+
     // Clear Board
     document.getElementById('btn-clear').addEventListener('click', () => {
         if (confirm('Are you sure you want to clear the board?')) {

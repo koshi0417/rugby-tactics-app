@@ -14,6 +14,10 @@ class Board {
         
         this.draggedElement = null;
         
+        this.isPlaying = false;
+        this.animationId = null;
+        this.initialState = null;
+        
         this.setupDragAndDrop();
         this.setupDrawing();
     }
@@ -231,15 +235,44 @@ class Board {
         if (this.currentPathElement && this.currentPathData) {
             // Add arrowhead
             this.addArrowhead();
+            
+            // Extract start coordinate from 'M x y'
+            const match = this.currentPathData.match(/^M\s+([0-9.-]+)\s+([0-9.-]+)/);
+            let playerId = null;
+            if (match) {
+                playerId = this.findClosestPlayer(parseFloat(match[1]), parseFloat(match[2]));
+            }
+
             this.lines.push({
                 id: this.currentPathElement.dataset.id,
                 type: this.currentTool,
                 d: this.currentPathData,
-                pathElement: this.currentPathElement
+                pathElement: this.currentPathElement,
+                playerId: playerId
             });
         }
         this.currentPathElement = null;
         this.currentPathData = "";
+    }
+
+    findClosestPlayer(svgX, svgY) {
+        const rect = this.pitchContainer.getBoundingClientRect();
+        const pX = (svgX / rect.width) * 100;
+        const pY = (svgY / rect.height) * 100;
+        
+        let closestId = null;
+        let minDistance = 10; // Threshold, roughly 10% of width
+        
+        this.players.forEach(p => {
+            const elX = parseFloat(p.element.style.left);
+            const elY = parseFloat(p.element.style.top);
+            const dist = Math.sqrt(Math.pow(elX - pX, 2) + Math.pow(elY - pY, 2));
+            if (dist < minDistance) {
+                minDistance = dist;
+                closestId = p.id;
+            }
+        });
+        return closestId;
     }
 
     addArrowhead() {
@@ -299,7 +332,8 @@ class Board {
             return {
                 id: l.id,
                 type: l.type,
-                d: l.d
+                d: l.d,
+                playerId: l.playerId
             };
         });
 
@@ -354,7 +388,8 @@ class Board {
                     id: l.id,
                     type: l.type,
                     d: l.d,
-                    pathElement: this.currentPathElement
+                    pathElement: this.currentPathElement,
+                    playerId: l.playerId
                 });
             });
             this.currentTool = 'pointer'; // Reset back
@@ -371,6 +406,79 @@ class Board {
         this.drawingLayer.innerHTML = '';
         if (defs) this.drawingLayer.appendChild(defs);
         this.lines = [];
+        this.initialState = null;
+        if (this.isPlaying) {
+            cancelAnimationFrame(this.animationId);
+            this.isPlaying = false;
+        }
+    }
+
+    // --- Simulation Logic ---
+    playSimulation() {
+        if (this.isPlaying) return;
+        if (this.lines.length === 0) return;
+
+        // Save initial state for reset if not already saved
+        if (!this.initialState) {
+            this.initialState = this.getState();
+        }
+        this.isPlaying = true;
+        this.setTool('pointer');
+
+        const duration = 2000; // 2 seconds
+        const startTime = performance.now();
+
+        // Get total lengths for all lines mapped to players
+        const lineData = this.lines.map(l => {
+            return {
+                line: l,
+                length: l.pathElement.getTotalLength(),
+                player: this.players.find(p => p.id === l.playerId)
+            };
+        }).filter(d => d.player);
+
+        if (lineData.length === 0) {
+            this.isPlaying = false;
+            return;
+        }
+
+        const animate = (time) => {
+            if (!this.isPlaying) return;
+            
+            let elapsed = time - startTime;
+            let progress = elapsed / duration;
+            if (progress > 1) progress = 1;
+
+            const rect = this.pitchContainer.getBoundingClientRect();
+
+            lineData.forEach(data => {
+                const pt = data.line.pathElement.getPointAtLength(data.length * progress);
+                const pX = (pt.x / rect.width) * 100;
+                const pY = (pt.y / rect.height) * 100;
+                
+                data.player.element.style.left = `${pX}%`;
+                data.player.element.style.top = `${pY}%`;
+            });
+
+            if (progress < 1) {
+                this.animationId = requestAnimationFrame(animate);
+            } else {
+                this.isPlaying = false;
+            }
+        };
+
+        this.animationId = requestAnimationFrame(animate);
+    }
+
+    resetSimulation() {
+        if (this.isPlaying) {
+            cancelAnimationFrame(this.animationId);
+            this.isPlaying = false;
+        }
+        if (this.initialState) {
+            this.loadState(this.initialState);
+            this.initialState = null;
+        }
     }
 }
 
