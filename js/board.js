@@ -108,6 +108,17 @@ class Board {
         }
     }
 
+    toggleBall(id) {
+        const player = this.players.find(p => p.id === id);
+        if (!player) return;
+        if (player.hasBall) {
+            player.hasBall = false;
+            player.element.classList.remove('has-ball');
+        } else {
+            this.giveBallTo(id);
+        }
+    }
+
     removePlayer(id) {
         const index = this.players.findIndex(p => p.id === id);
         if (index > -1) {
@@ -119,6 +130,13 @@ class Board {
     makeNodeDraggable(element, id) {
         let isDragging = false;
         
+        element.addEventListener('dblclick', (e) => {
+            if (this.currentTool === 'pointer') {
+                this.toggleBall(id);
+                e.stopPropagation();
+            }
+        });
+
         element.addEventListener('mousedown', (e) => {
             if (this.currentTool !== 'pointer') return;
             isDragging = true;
@@ -223,13 +241,27 @@ class Board {
         this.currentPathData = `M ${coords.x} ${coords.y}`;
         
         this.currentPathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        this.currentPathElement.setAttribute('d', this.currentPathData);
         this.currentPathElement.setAttribute('fill', 'none');
         this.currentPathElement.setAttribute('stroke-width', '3');
         this.currentPathElement.setAttribute('stroke-linecap', 'round');
         this.currentPathElement.setAttribute('stroke-linejoin', 'round');
         this.currentPathElement.setAttribute('class', 'tactics-line');
         this.currentPathElement.dataset.id = 'line_' + Date.now();
+
+        if (this.currentTool === 'pass' || this.currentTool === 'kick') {
+            this.passStartCoords = coords;
+            this.passStartPlayerId = this.findClosestPlayer(coords.x, coords.y);
+            if (this.passStartPlayerId) {
+                const p = this.players.find(pl => pl.id === this.passStartPlayerId);
+                const rect = this.pitchContainer.getBoundingClientRect();
+                const pX = (parseFloat(p.element.style.left) / 100) * rect.width;
+                const pY = (parseFloat(p.element.style.top) / 100) * rect.height;
+                this.currentPathData = `M ${pX} ${pY}`;
+                this.passStartCoords = {x: pX, y: pY};
+            }
+        }
+
+        this.currentPathElement.setAttribute('d', this.currentPathData);
 
         if (this.currentTool === 'run') {
             this.currentPathElement.setAttribute('stroke', '#f8fafc');
@@ -238,12 +270,10 @@ class Board {
             this.currentPathElement.setAttribute('stroke-dasharray', '8,8');
         } else if (this.currentTool === 'kick') {
             this.currentPathElement.setAttribute('stroke', '#eab308');
-            // A bit hacky wave approximation with dashes
             this.currentPathElement.setAttribute('stroke-dasharray', '2,6');
             this.currentPathElement.setAttribute('stroke-width', '4');
         }
 
-        // Add erase event
         this.currentPathElement.addEventListener('click', (e) => {
             if (this.currentTool === 'erase') {
                 this.removeLine(e.target.dataset.id);
@@ -256,7 +286,12 @@ class Board {
     draw(e) {
         if (!this.isDrawing || !this.currentPathElement) return;
         const coords = this.getSVGCoords(e);
-        this.currentPathData += ` L ${coords.x} ${coords.y}`;
+        
+        if (this.currentTool === 'pass' || this.currentTool === 'kick') {
+            this.currentPathData = `M ${this.passStartCoords.x} ${this.passStartCoords.y} L ${coords.x} ${coords.y}`;
+        } else {
+            this.currentPathData += ` L ${coords.x} ${coords.y}`;
+        }
         this.currentPathElement.setAttribute('d', this.currentPathData);
     }
 
@@ -264,16 +299,31 @@ class Board {
         if (!this.isDrawing) return;
         this.isDrawing = false;
         
-        // Save line data
         if (this.currentPathElement && this.currentPathData) {
-            // Add arrowhead
             this.addArrowhead();
             
-            // Extract start coordinate from 'M x y'
-            const match = this.currentPathData.match(/^M\s+([0-9.-]+)\s+([0-9.-]+)/);
             let playerId = null;
-            if (match) {
-                playerId = this.findClosestPlayer(parseFloat(match[1]), parseFloat(match[2]));
+            let receiverId = null;
+
+            if (this.currentTool === 'pass' || this.currentTool === 'kick') {
+                playerId = this.passStartPlayerId;
+                const match = this.currentPathData.match(/L\s+([0-9.-]+)\s+([0-9.-]+)$/);
+                if (match) {
+                    receiverId = this.findClosestPlayer(parseFloat(match[1]), parseFloat(match[2]));
+                    if (receiverId) {
+                        const p = this.players.find(pl => pl.id === receiverId);
+                        const rect = this.pitchContainer.getBoundingClientRect();
+                        const pX = (parseFloat(p.element.style.left) / 100) * rect.width;
+                        const pY = (parseFloat(p.element.style.top) / 100) * rect.height;
+                        this.currentPathData = `M ${this.passStartCoords.x} ${this.passStartCoords.y} L ${pX} ${pY}`;
+                        this.currentPathElement.setAttribute('d', this.currentPathData);
+                    }
+                }
+            } else {
+                const match = this.currentPathData.match(/^M\s+([0-9.-]+)\s+([0-9.-]+)/);
+                if (match) {
+                    playerId = this.findClosestPlayer(parseFloat(match[1]), parseFloat(match[2]));
+                }
             }
 
             this.lines.push({
@@ -281,11 +331,14 @@ class Board {
                 type: this.currentTool,
                 d: this.currentPathData,
                 pathElement: this.currentPathElement,
-                playerId: playerId
+                playerId: playerId,
+                receiverId: receiverId
             });
         }
         this.currentPathElement = null;
         this.currentPathData = "";
+        this.passStartCoords = null;
+        this.passStartPlayerId = null;
     }
 
     findClosestPlayer(svgX, svgY) {
@@ -367,7 +420,8 @@ class Board {
                 id: l.id,
                 type: l.type,
                 d: l.d,
-                playerId: l.playerId
+                playerId: l.playerId,
+                receiverId: l.receiverId
             };
         });
 
@@ -423,7 +477,8 @@ class Board {
                     type: l.type,
                     d: l.d,
                     pathElement: this.currentPathElement,
-                    playerId: l.playerId
+                    playerId: l.playerId,
+                    receiverId: l.receiverId
                 });
             });
             this.currentTool = 'pointer'; // Reset back
@@ -477,54 +532,13 @@ class Board {
             const carrierPass = passes.find(p => p.playerId === initialCarrier.id);
             if (carrierPass) {
                 let t1 = 0;
-                const passPath = carrierPass.pathElement;
-                const passStartPt = passPath.getPointAtLength(0);
-                
-                if (playerRuns[initialCarrier.id]) {
-                    const runPath = playerRuns[initialCarrier.id].pathElement;
-                    const runLen = runPath.getTotalLength();
-                    let minDist = Infinity;
-                    for(let i=0; i<=50; i++) {
-                        const pt = runPath.getPointAtLength((i/50)*runLen);
-                        const dist = Math.hypot(pt.x - passStartPt.x, pt.y - passStartPt.y);
-                        if (dist < minDist) {
-                            minDist = dist;
-                            t1 = i/50;
-                        }
-                    }
-                }
+                let t2 = 0.3; // pass happens immediately and takes 30% time
                 
                 ballEvents.push({ startT: 0, endT: t1, type: 'carry', playerId: initialCarrier.id });
+                ballEvents.push({ startT: t1, endT: t2, type: 'pass', path: carrierPass.pathElement });
                 
-                let t2 = Math.min(1.0, t1 + 0.3); // pass flight time
-                ballEvents.push({ startT: t1, endT: t2, type: 'pass', path: passPath });
-                
-                const passEndPt = passPath.getPointAtLength(passPath.getTotalLength());
-                let receiverId = null;
-                let minRecDist = 60; // detection radius
-                
-                this.players.forEach(p => {
-                    if (p.id === initialCarrier.id || p.type === 'ball') return;
-                    
-                    let pPos = { x: parseFloat(p.element.style.left), y: parseFloat(p.element.style.top) };
-                    if (playerRuns[p.id]) {
-                        const runPath = playerRuns[p.id].pathElement;
-                        const pt = runPath.getPointAtLength(t2 * runPath.getTotalLength());
-                        pPos = { x: pt.x, y: pt.y };
-                    } else {
-                        const rect = this.pitchContainer.getBoundingClientRect();
-                        pPos = { x: (pPos.x/100)*rect.width, y: (pPos.y/100)*rect.height };
-                    }
-                    
-                    const dist = Math.hypot(pPos.x - passEndPt.x, pPos.y - passEndPt.y);
-                    if (dist < minRecDist) {
-                        minRecDist = dist;
-                        receiverId = p.id;
-                    }
-                });
-                
-                if (receiverId) {
-                    ballEvents.push({ startT: t2, endT: 1.0, type: 'carry', playerId: receiverId });
+                if (carrierPass.receiverId) {
+                    ballEvents.push({ startT: t2, endT: 1.0, type: 'carry', playerId: carrierPass.receiverId });
                 }
             } else {
                 ballEvents.push({ startT: 0, endT: 1.0, type: 'carry', playerId: initialCarrier.id });
